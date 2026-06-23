@@ -1,0 +1,76 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    # Bắt buộc chạy qua hết Unit Test và đóng gói file .jar
+    - name: Build with Maven
+      run: mvn -B package --file pom.xml
+
+    # Đón lấy file .jar vừa build xong để chuyển giao cho job deploy bên dưới
+    - name: Lưu file Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: banhcanh-be-jar
+        path: target/*.jar
+
+    # Giữ nguyên tính năng bảo mật của GitHub template
+    - name: Update dependency graph
+      uses: advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Tải file JAR đã build từ job trước
+      uses: actions/download-artifact@v4
+      with:
+        name: banhcanh-be-jar
+        path: target/
+
+    - name: Deploy sang Server qua SSH/SCP
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        source: "target/*.jar"
+        target: "/var/www/banhcanh-backend"
+        strip_components: 1
+
+    - name: Khởi động lại dịch vụ trên Server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /var/www/banhcanh-backend
+          echo "Đang dọn dẹp port 8080..."
+          fuser -k 8080/tcp || true
+          echo "Khởi chạy file JAR mới..."
+          nohup java -jar *.jar > app.log 2>&1 &
+          sleep 5
+          ps aux | grep java
