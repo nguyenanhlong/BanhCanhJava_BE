@@ -2,10 +2,13 @@ package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.Order;
 import com.example.banhcanh.repository.OrderRepository;
+import com.example.banhcanh.repository.DriverRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -15,20 +18,36 @@ public class OrderController {
     private OrderRepository orderRepository;
 
     @Autowired
-    private com.example.banhcanh.repository.DriverRepository driverRepository;
+    private DriverRepository driverRepository;
 
     @GetMapping
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
     }
 
+    @GetMapping("/stats")
+    public Map<String, Object> getOrderStats() {
+        List<Order> allOrders = orderRepository.findAll();
+        long totalOrders = allOrders.size();
+        double totalRevenue = allOrders.stream()
+                .filter(o -> "completed".equals(o.getStatus()))
+                .mapToDouble(Order::getTotalAmount)
+                .sum();
+        long completedOrders = allOrders.stream().filter(o -> "completed".equals(o.getStatus())).count();
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalOrders", totalOrders);
+        stats.put("totalRevenue", totalRevenue);
+        stats.put("completedOrders", completedOrders);
+        return stats;
+    }
+
     @PostMapping
     public Order createOrder(@RequestBody Order order) {
         order.setStatus("pending");
-        if (order.getPaymentMethod().equals("cod")) {
+        if ("cod".equals(order.getPaymentMethod())) {
             order.setPaymentStatus("pending");
         } else {
-            order.setPaymentStatus("paid"); // Simulated card/momo
+            order.setPaymentStatus("paid");
         }
         return orderRepository.save(order);
     }
@@ -46,7 +65,6 @@ public class OrderController {
         return orderRepository.findById(id).map(order -> {
             order.setDriverId(driverId);
             driverRepository.findById(driverId).ifPresent(driver -> {
-                order.setDriverName(driver.getName());
                 driver.setStatus("busy");
                 driverRepository.save(driver);
             });

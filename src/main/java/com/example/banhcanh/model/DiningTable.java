@@ -6,22 +6,22 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "drivers")
-public class Driver {
+@Table(name = "dining_tables")
+public class DiningTable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String name;
+    @Column(name = "table_number", length = 20, nullable = false, unique = true)
+    private String tableNumber;
 
-    @Column(nullable = false, unique = true)
-    private String phone;
+    @Column
+    private Integer capacity = 4;
 
     @Column(length = 100)
-    private String vehicle;
+    private String position;
 
-    @Column(length = 50, nullable = false)
+    @Column(length = 20)
     private String status = "available";
 
     @Column(name = "is_active")
