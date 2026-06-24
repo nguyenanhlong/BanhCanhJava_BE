@@ -20,7 +20,7 @@ public class DriverController {
     }
 
     @PostMapping
-    public Driver registerDriver(@RequestBody Driver driver) {
+    public Driver createDriver(@RequestBody Driver driver) {
         driver.setStatus("available");
         return driverRepository.save(driver);
     }

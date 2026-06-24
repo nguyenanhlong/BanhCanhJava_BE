@@ -21,7 +21,7 @@ public class ProductController {
 
     @GetMapping("/category/{category}")
     public List<Product> getProductsByCategory(@PathVariable String category) {
-        return productRepository.findByCategory(category);
+        return productRepository.findByCategoryName(category);
     }
 
     @PostMapping
@@ -35,9 +35,12 @@ public class ProductController {
             product.setName(productDetails.getName());
             product.setDescription(productDetails.getDescription());
             product.setPrice(productDetails.getPrice());
-            product.setCategory(productDetails.getCategory());
+            product.setCategoryId(productDetails.getCategoryId());
+            product.setCategoryName(productDetails.getCategoryName());
             product.setIsBestSeller(productDetails.getIsBestSeller());
+            product.setIsAvailable(productDetails.getIsAvailable());
             product.setImageUrl(productDetails.getImageUrl());
+            product.setPreparationTime(productDetails.getPreparationTime());
             return ResponseEntity.ok(productRepository.save(product));
         }).orElse(ResponseEntity.notFound().build());
     }
