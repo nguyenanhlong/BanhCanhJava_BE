@@ -12,14 +12,20 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
-    @Column(name = "product_id", nullable = false)
+    @Column(name = "product_id")
     private Long productId;
 
     @Column(name = "order_id")
     private Long orderId;
+
+    @Column(name = "customer_name", length = 200)
+    private String customerName;
+
+    @Column(name = "product_name", length = 200)
+    private String productName;
 
     @Column(nullable = false)
     private Integer rating;

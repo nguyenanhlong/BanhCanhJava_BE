@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -34,11 +33,11 @@ public class OrderController {
                 .mapToDouble(Order::getTotalAmount)
                 .sum();
         long completedOrders = allOrders.stream().filter(o -> "completed".equals(o.getStatus())).count();
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("totalOrders", totalOrders);
-        stats.put("totalRevenue", totalRevenue);
-        stats.put("completedOrders", completedOrders);
-        return stats;
+        return Map.of(
+            "totalOrders", totalOrders,
+            "totalRevenue", totalRevenue,
+            "completedOrders", completedOrders
+        );
     }
 
     @PostMapping
@@ -53,18 +52,43 @@ public class OrderController {
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<Order> updateStatus(@PathVariable Long id, @RequestParam String status) {
-        return orderRepository.findById(id).map(order -> {
+    public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam String status) {
+        Long longId;
+        try {
+            longId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID đơn hàng không hợp lệ: '" + id + "' phải là số"));
+        }
+        return orderRepository.findById(longId).map(order -> {
             order.setStatus(status);
+            if ("completed".equals(status) || "cancelled".equals(status)) {
+                if (order.getDriverId() != null) {
+                    driverRepository.findById(order.getDriverId()).ifPresent(driver -> {
+                        driver.setStatus("available");
+                        driverRepository.save(driver);
+                    });
+                }
+            }
             return ResponseEntity.ok(orderRepository.save(order));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{id}/assign-driver/{driverId}")
-    public ResponseEntity<Order> assignDriver(@PathVariable Long id, @PathVariable Long driverId) {
-        return orderRepository.findById(id).map(order -> {
-            order.setDriverId(driverId);
-            driverRepository.findById(driverId).ifPresent(driver -> {
+    public ResponseEntity<?> assignDriver(@PathVariable String id, @PathVariable String driverId) {
+        Long longId, longDriverId;
+        try {
+            longId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID đơn hàng không hợp lệ: '" + id + "' phải là số"));
+        }
+        try {
+            longDriverId = Long.parseLong(driverId);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID tài xế không hợp lệ: '" + driverId + "' phải là số"));
+        }
+        return orderRepository.findById(longId).map(order -> {
+            order.setDriverId(longDriverId);
+            driverRepository.findById(longDriverId).ifPresent(driver -> {
                 driver.setStatus("busy");
                 driverRepository.save(driver);
             });

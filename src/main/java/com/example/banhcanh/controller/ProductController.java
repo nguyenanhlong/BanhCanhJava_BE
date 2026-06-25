@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -30,8 +31,14 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product productDetails) {
-        return productRepository.findById(id).map(product -> {
+    public ResponseEntity<?> updateProduct(@PathVariable String id, @RequestBody Product productDetails) {
+        Long longId;
+        try {
+            longId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID sản phẩm không hợp lệ: '" + id + "' phải là số"));
+        }
+        return productRepository.findById(longId).map(product -> {
             product.setName(productDetails.getName());
             product.setDescription(productDetails.getDescription());
             product.setPrice(productDetails.getPrice());
@@ -46,8 +53,14 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
-        return productRepository.findById(id).map(product -> {
+    public ResponseEntity<?> deleteProduct(@PathVariable String id) {
+        Long longId;
+        try {
+            longId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID sản phẩm không hợp lệ: '" + id + "' phải là số"));
+        }
+        return productRepository.findById(longId).map(product -> {
             productRepository.delete(product);
             return ResponseEntity.ok().build();
         }).orElse(ResponseEntity.notFound().build());

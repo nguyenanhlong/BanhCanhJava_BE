@@ -40,6 +40,10 @@ public class AuthController {
                     response.put("username", user.getUsername());
                     response.put("email", user.getEmail());
                     response.put("role", user.getRole());
+                    response.put("fullName", user.getFullName());
+                    response.put("phone", user.getPhone());
+                    response.put("address", user.getAddress());
+                    response.put("avatarUrl", user.getAvatarUrl());
                     return ResponseEntity.ok(response);
                 }
                 return ResponseEntity.badRequest().body("Mật khẩu không chính xác!");
