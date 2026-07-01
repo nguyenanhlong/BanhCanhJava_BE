@@ -1,11 +1,14 @@
 package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.Order;
+import com.example.banhcanh.model.OrderStatusHistory;
 import com.example.banhcanh.repository.OrderRepository;
 import com.example.banhcanh.repository.DriverRepository;
+import com.example.banhcanh.repository.OrderStatusHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -19,9 +22,22 @@ public class OrderController {
     @Autowired
     private DriverRepository driverRepository;
 
+    @Autowired
+    private OrderStatusHistoryRepository historyRepository;
+
     @GetMapping
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getById(@PathVariable String id) {
+        Long longId;
+        try { longId = Long.parseLong(id); }
+        catch (NumberFormatException e) { return ResponseEntity.badRequest().body(Map.of("error", "ID không hợp lệ: '" + id + "' phải là số")); }
+        return orderRepository.findById(longId)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/stats")
@@ -33,10 +49,12 @@ public class OrderController {
                 .mapToDouble(Order::getTotalAmount)
                 .sum();
         long completedOrders = allOrders.stream().filter(o -> "completed".equals(o.getStatus())).count();
+        long pendingOrders = allOrders.stream().filter(o -> "pending".equals(o.getStatus())).count();
         return Map.of(
             "totalOrders", totalOrders,
             "totalRevenue", totalRevenue,
-            "completedOrders", completedOrders
+            "completedOrders", completedOrders,
+            "pendingOrders", pendingOrders
         );
     }
 
@@ -48,7 +66,10 @@ public class OrderController {
         } else {
             order.setPaymentStatus("paid");
         }
-        return orderRepository.save(order);
+        order.setCreatedAt(LocalDateTime.now());
+        Order saved = orderRepository.save(order);
+        saveHistory(saved.getId(), null, "pending", 0L, "Đơn hàng được tạo");
+        return saved;
     }
 
     @PutMapping("/{id}/status")
@@ -60,6 +81,7 @@ public class OrderController {
             return ResponseEntity.badRequest().body(Map.of("error", "ID đơn hàng không hợp lệ: '" + id + "' phải là số"));
         }
         return orderRepository.findById(longId).map(order -> {
+            String oldStatus = order.getStatus();
             order.setStatus(status);
             if ("completed".equals(status) || "cancelled".equals(status)) {
                 if (order.getDriverId() != null) {
@@ -69,7 +91,9 @@ public class OrderController {
                     });
                 }
             }
-            return ResponseEntity.ok(orderRepository.save(order));
+            Order saved = orderRepository.save(order);
+            saveHistory(saved.getId(), oldStatus, status, 0L, "Cập nhật trạng thái");
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -92,8 +116,20 @@ public class OrderController {
                 driver.setStatus("busy");
                 driverRepository.save(driver);
             });
-            order.setStatus("shipping");
-            return ResponseEntity.ok(orderRepository.save(order));
+            Order saved = orderRepository.save(order);
+            saveHistory(saved.getId(), order.getStatus(), order.getStatus(), longDriverId, "Giao tài xế #" + longDriverId);
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private void saveHistory(Long orderId, String oldStatus, String newStatus, Long changedBy, String notes) {
+        OrderStatusHistory h = new OrderStatusHistory();
+        h.setOrderId(orderId);
+        h.setOldStatus(oldStatus);
+        h.setNewStatus(newStatus);
+        h.setChangedBy(changedBy);
+        h.setNotes(notes);
+        h.setCreatedAt(LocalDateTime.now());
+        historyRepository.save(h);
     }
 }

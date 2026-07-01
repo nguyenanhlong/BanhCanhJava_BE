@@ -37,6 +37,15 @@ public class User {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
+    @Column(name = "total_spent")
+    private Double totalSpent = 0.0;
+
+    @Column(name = "total_orders")
+    private Integer totalOrders = 0;
+
+    @Column(name = "membership_tier_id")
+    private Long membershipTierId = 1L;
+
     @Column(name = "is_active")
     private Boolean isActive = true;
 
