@@ -71,28 +71,24 @@ jobs:
   # ───────────────────── CD: DEPLOY TO RAILWAY ─────────────────────
   deploy:
     needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout mã nguồn
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/checkout@v4
 
       - name: Download JAR artifact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/download-artifact@v4
         with:
           name: be-jar
           path: target/
 
       - name: Install Railway CLI
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: npm i -g @railway/cli
 
       - name: Deploy to Railway
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          railway up --service backend --detach
+        run: railway up --service backend --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_BE }}
           RAILWAY_ENVIRONMENT: production
