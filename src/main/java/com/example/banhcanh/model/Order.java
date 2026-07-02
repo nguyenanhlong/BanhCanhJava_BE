@@ -25,9 +25,6 @@ public class Order {
     @Column(columnDefinition = "TEXT")
     private String address;
 
-    @Column(name = "table_id")
-    private Long tableId;
-
     @Column(name = "order_type", length = 20)
     private String orderType = "delivery";
 
@@ -60,6 +57,24 @@ public class Order {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "delivery_area_id")
+    private Long deliveryAreaId;
+
+    @Column(name = "delivery_distance_km")
+    private Double deliveryDistanceKm = 0.0;
+
+    @Column(name = "delivery_fee")
+    private Double deliveryFee = 0.0;
+
+    @Column(name = "membership_discount")
+    private Double membershipDiscount = 0.0;
+
+    @Column(name = "membership_voucher_id")
+    private Long membershipVoucherId;
+
+    @Column(name = "out_of_area")
+    private Boolean outOfArea = false;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

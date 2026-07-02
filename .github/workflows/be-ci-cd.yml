@@ -1,28 +1,63 @@
-name: Java CI với Maven
+name: Backend CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
   pull_request:
     branches: [ "main" ]
 
+env:
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'temurin'
+
 jobs:
-  build:
+  # ───────────────────── CI: COMPILE & TEST ─────────────────────
+  ci:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout mã nguồn
-      uses: actions/checkout@v4
-    
-    # Cấu hình môi trường Java 17 để chạy dự án
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: maven
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
 
-    # Tiến hành biên dịch code và đóng gói thử file .jar
-    # Đã thêm -DskipTests để không bị lỗi kết nối Database khi chạy CI
-    - name: Build with Maven
-      run: mvn -B package -DskipTests --file pom.xml
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Compile source
+        run: mvn -B compile --file pom.xml
+
+      - name: Package JAR (skip tests vì cần DB)
+        run: mvn -B package -DskipTests --file pom.xml
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: be-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # ───────────────────── CD: DEPLOY TO RAILWAY ─────────────────────
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: be-jar
+          path: target/
+
+      - name: Cài đặt Railway CLI
+        uses: railway/railway-action@v3
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN_BE }}
+        env:
+          RAILWAY_SERVICE_NAME: backend
