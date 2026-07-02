@@ -55,9 +55,11 @@ jobs:
           name: be-jar
           path: target/
 
-      - name: Cài đặt Railway CLI
-        uses: railway/railway-action@v3
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN_BE }}
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service ${{ env.RAILWAY_SERVICE_NAME }} --detach
         env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_BE }}
           RAILWAY_SERVICE_NAME: backend
