@@ -15,9 +15,30 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123
+          MYSQL_DATABASE: railway
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+        ports:
+          - 3306:3306
+
     steps:
       - name: Checkout mã nguồn
         uses: actions/checkout@v4
+
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            mysql -h 127.0.0.1 -u root -proot123 -e "SELECT 1" && break || sleep 1
+          done
+        continue-on-error: true
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -29,7 +50,15 @@ jobs:
       - name: Compile source
         run: mvn -B compile --file pom.xml
 
-      - name: Package JAR (skip tests vì cần DB)
+      - name: Run Tests (MySQL)
+        run: mvn -B test --file pom.xml
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root123
+          MYSQL_DATABASE: railway
+
+      - name: Package JAR
         run: mvn -B package -DskipTests --file pom.xml
 
       - name: Upload JAR artifact
