@@ -30,6 +30,9 @@ public class Driver {
     @Column(name = "vehicle_color", length = 50)
     private String vehicleColor;
 
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
     @Column(length = 100)
     private String vehicle;
 

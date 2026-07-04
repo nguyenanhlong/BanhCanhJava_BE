@@ -1,23 +1,19 @@
 package com.example.banhcanh.controller;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.example.banhcanh.service.S3Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/upload")
 public class UploadController {
 
-    @Value("${upload.dir:uploads}")
-    private String uploadDir;
+    @Autowired
+    private S3Service s3Service;
 
     @PostMapping("/image")
     public ResponseEntity<?> uploadImage(
@@ -34,25 +30,9 @@ public class UploadController {
         }
 
         try {
-            String uploadPath = uploadDir + File.separator + folder;
-            Path uploadDirPath = Paths.get(uploadPath);
-            Files.createDirectories(uploadDirPath);
-
-            String originalName = file.getOriginalFilename();
-            String ext = "";
-            if (originalName != null && originalName.contains(".")) {
-                ext = originalName.substring(originalName.lastIndexOf("."));
-            }
-            String fileName = UUID.randomUUID().toString() + ext;
-
-            Path filePath = uploadDirPath.resolve(fileName);
-            Files.copy(file.getInputStream(), filePath);
-
-            String fileUrl = "/api/uploads/" + folder + "/" + fileName;
-
+            String url = s3Service.uploadFile(file, folder);
             return ResponseEntity.ok(Map.of(
-                "url", fileUrl,
-                "fileName", fileName,
+                "url", url,
                 "folder", folder
             ));
         } catch (Exception e) {

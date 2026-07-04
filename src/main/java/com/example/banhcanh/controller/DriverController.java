@@ -60,6 +60,7 @@ public class DriverController {
             driver.setVehicleType((String) body.getOrDefault("vehicleType", "Xe máy"));
             driver.setVehiclePlate((String) body.getOrDefault("vehiclePlate", ""));
             driver.setVehicleColor((String) body.getOrDefault("vehicleColor", ""));
+            driver.setAvatarUrl((String) body.getOrDefault("avatarUrl", ""));
             String vehicle = (String) body.get("vehicle");
             if (vehicle == null || vehicle.isBlank()) {
                 vehicle = driver.getVehicleType() + " - " + driver.getVehiclePlate();
@@ -100,16 +101,34 @@ public class DriverController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateDriver(@PathVariable String id, @RequestBody Driver update) {
+    public ResponseEntity<?> updateDriver(@PathVariable String id, @RequestBody Map<String, Object> body) {
         Long longId;
         try { longId = Long.parseLong(id); }
         catch (NumberFormatException e) { return ResponseEntity.badRequest().body(Map.of("error", "ID không hợp lệ")); }
         return driverRepository.findById(longId).map(driver -> {
-            if (update.getName() != null) driver.setName(update.getName());
-            if (update.getPhone() != null) driver.setPhone(update.getPhone());
-            if (update.getVehicleType() != null) driver.setVehicleType(update.getVehicleType());
-            if (update.getVehiclePlate() != null) driver.setVehiclePlate(update.getVehiclePlate());
-            if (update.getStatus() != null) driver.setStatus(update.getStatus());
+            if (body.containsKey("name")) driver.setName((String) body.get("name"));
+            if (body.containsKey("phone")) driver.setPhone((String) body.get("phone"));
+            if (body.containsKey("vehicleType")) driver.setVehicleType((String) body.get("vehicleType"));
+            if (body.containsKey("vehiclePlate")) driver.setVehiclePlate((String) body.get("vehiclePlate"));
+            if (body.containsKey("vehicleColor")) driver.setVehicleColor((String) body.get("vehicleColor"));
+            if (body.containsKey("avatarUrl")) driver.setAvatarUrl((String) body.get("avatarUrl"));
+            if (body.containsKey("status")) driver.setStatus((String) body.get("status"));
+            if (body.containsKey("vehicle")) driver.setVehicle((String) body.get("vehicle"));
+
+            // Update password in associated User record
+            if (body.containsKey("password")) {
+                String newPassword = (String) body.get("password");
+                if (newPassword != null && !newPassword.isBlank()) {
+                    Long userId = driver.getUserId();
+                    if (userId != null) {
+                        userRepository.findById(userId).ifPresent(user -> {
+                            user.setPassword(newPassword);
+                            userRepository.save(user);
+                        });
+                    }
+                }
+            }
+
             return ResponseEntity.ok(driverRepository.save(driver));
         }).orElse(ResponseEntity.notFound().build());
     }
