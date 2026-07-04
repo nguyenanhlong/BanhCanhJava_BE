@@ -56,4 +56,52 @@ public class UserController {
             return ResponseEntity.ok(Map.of("message", "Đã đổi mật khẩu thành công"));
         }).orElse(ResponseEntity.notFound().build());
     }
+
+    // === Admin operations ===
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        return userRepository.findById(id).map(user -> {
+            userRepository.delete(user);
+            return ResponseEntity.ok(Map.of("message", "Đã xoá tài khoản " + user.getUsername()));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/role")
+    public ResponseEntity<?> changeUserRole(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String newRole = body.get("role");
+        if (newRole == null || (!newRole.equals("customer") && !newRole.equals("driver") && !newRole.equals("admin"))) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Vai trò không hợp lệ. Chấp nhận: customer, driver, admin"));
+        }
+        return userRepository.findById(id).map(user -> {
+            user.setRole(newRole);
+            user.setUpdatedAt(java.time.LocalDateTime.now());
+            userRepository.save(user);
+            return ResponseEntity.ok(Map.of("message", "Đã đổi vai trò thành " + newRole));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/toggle-active")
+    public ResponseEntity<?> toggleUserActive(@PathVariable Long id) {
+        return userRepository.findById(id).map(user -> {
+            user.setIsActive(!Boolean.TRUE.equals(user.getIsActive()));
+            user.setUpdatedAt(java.time.LocalDateTime.now());
+            userRepository.save(user);
+            return ResponseEntity.ok(Map.of("isActive", user.getIsActive()));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/admin-reset-password")
+    public ResponseEntity<?> adminResetPassword(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String newPassword = body.get("newPassword");
+        if (newPassword == null || newPassword.length() < 6) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Mật khẩu mới phải có ít nhất 6 ký tự"));
+        }
+        return userRepository.findById(id).map(user -> {
+            user.setPassword(newPassword);
+            user.setUpdatedAt(java.time.LocalDateTime.now());
+            userRepository.save(user);
+            return ResponseEntity.ok(Map.of("message", "Đã đặt lại mật khẩu thành công"));
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }
