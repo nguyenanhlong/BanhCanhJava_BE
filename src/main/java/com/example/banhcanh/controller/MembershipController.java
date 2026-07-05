@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -115,6 +117,9 @@ public class MembershipController {
         Double discountPercent = body.get("discountPercent") != null ? Double.valueOf(body.get("discountPercent").toString()) : 10.0;
         Double maxDiscount = body.get("maxDiscount") != null ? Double.valueOf(body.get("maxDiscount").toString()) : 50000.0;
         Double minOrderAmount = body.get("minOrderAmount") != null ? Double.valueOf(body.get("minOrderAmount").toString()) : 0.0;
+        String code = body.get("code") != null ? body.get("code").toString() : null;
+        String status = body.get("status") != null ? body.get("status").toString() : "available";
+        String expiresAtStr = body.get("expiresAt") != null ? body.get("expiresAt").toString() : null;
 
         if (userId == null || tierId == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId và tierId là bắt buộc"));
@@ -123,14 +128,48 @@ public class MembershipController {
         MembershipVoucher v = new MembershipVoucher();
         v.setUserId(userId);
         v.setTierId(tierId);
-        v.setCode("ADM" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        v.setCode(code != null && !code.isBlank() ? code : "ADM" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         v.setDiscountPercent(discountPercent);
         v.setMaxDiscount(maxDiscount);
         v.setMinOrderAmount(minOrderAmount);
-        v.setStatus("available");
+        v.setStatus(status);
         v.setIssuedAt(LocalDateTime.now());
-        v.setExpiresAt(LocalDateTime.now().plusDays(30));
+        v.setExpiresAt(expiresAtStr != null ? parseDateTime(expiresAtStr) : LocalDateTime.now().plusDays(30));
         return ResponseEntity.ok(voucherRepo.save(v));
+    }
+
+    @PostMapping("/admin/vouchers/batch")
+    public ResponseEntity<?> adminCreateVouchersBatch(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Integer> userIdsRaw = (List<Integer>) body.get("userIds");
+        Long tierId = body.get("tierId") != null ? Long.valueOf(body.get("tierId").toString()) : null;
+        Double discountPercent = body.get("discountPercent") != null ? Double.valueOf(body.get("discountPercent").toString()) : 10.0;
+        Double maxDiscount = body.get("maxDiscount") != null ? Double.valueOf(body.get("maxDiscount").toString()) : 50000.0;
+        Double minOrderAmount = body.get("minOrderAmount") != null ? Double.valueOf(body.get("minOrderAmount").toString()) : 0.0;
+        String code = body.get("code") != null ? body.get("code").toString() : null;
+        String status = body.get("status") != null ? body.get("status").toString() : "available";
+        String expiresAtStr = body.get("expiresAt") != null ? body.get("expiresAt").toString() : null;
+
+        if (userIdsRaw == null || userIdsRaw.isEmpty() || tierId == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userIds và tierId là bắt buộc"));
+        }
+
+        List<MembershipVoucher> vouchers = new java.util.ArrayList<>();
+        for (Integer uid : userIdsRaw) {
+            MembershipVoucher v = new MembershipVoucher();
+            v.setUserId(uid.longValue());
+            v.setTierId(tierId);
+            v.setCode(code != null && !code.isBlank() ? code + "-" + uid : "ADM" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+            v.setDiscountPercent(discountPercent);
+            v.setMaxDiscount(maxDiscount);
+            v.setMinOrderAmount(minOrderAmount);
+            v.setStatus(status);
+            v.setIssuedAt(LocalDateTime.now());
+            v.setExpiresAt(expiresAtStr != null ? parseDateTime(expiresAtStr) : LocalDateTime.now().plusDays(30));
+            vouchers.add(v);
+        }
+        voucherRepo.saveAll(vouchers);
+        return ResponseEntity.ok(Map.of("created", vouchers.size()));
     }
 
     @PutMapping("/vouchers/{voucherId}/use")
@@ -143,5 +182,13 @@ public class MembershipController {
             v.setUsedAt(LocalDateTime.now());
             return ResponseEntity.ok(voucherRepo.save(v));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private LocalDateTime parseDateTime(String str) {
+        try {
+            return LocalDateTime.parse(str, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (Exception e) {
+            return LocalDate.parse(str).atTime(23, 59, 59);
+        }
     }
 }
