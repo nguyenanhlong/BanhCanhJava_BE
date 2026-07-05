@@ -1,10 +1,7 @@
 package com.example.banhcanh.controller;
 
-import com.example.banhcanh.model.Order;
-import com.example.banhcanh.model.OrderStatusHistory;
-import com.example.banhcanh.repository.OrderRepository;
-import com.example.banhcanh.repository.DriverRepository;
-import com.example.banhcanh.repository.OrderStatusHistoryRepository;
+import com.example.banhcanh.model.*;
+import com.example.banhcanh.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +21,18 @@ public class OrderController {
 
     @Autowired
     private OrderStatusHistoryRepository historyRepository;
+
+    @Autowired
+    private InvoiceRepository invoiceRepository;
+
+    @Autowired
+    private InvoiceDetailRepository invoiceDetailRepository;
+
+    @Autowired
+    private PaymentTransactionRepository paymentTransactionRepository;
+
+    @Autowired
+    private DeliveryTripRepository deliveryTripRepository;
 
     @GetMapping
     public List<Order> getAllOrders() {
@@ -69,6 +78,45 @@ public class OrderController {
         order.setCreatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
         saveHistory(saved.getId(), null, "pending", 0L, "Đơn hàng được tạo");
+
+        Invoice invoice = new Invoice();
+        invoice.setOrderId(saved.getId());
+        invoice.setInvoiceNumber("INV-" + System.currentTimeMillis());
+        invoice.setTotalAmount(saved.getTotalAmount());
+        invoice.setCustomerName(saved.getCustomerName());
+        invoice.setCustomerPhone(saved.getPhone());
+        invoice.setAddress(saved.getAddress());
+        invoice.setPaymentMethod(saved.getPaymentMethod());
+        invoice.setSubtotal(saved.getSubtotal());
+        invoice.setDiscountAmount(saved.getDiscountAmount());
+        invoice.setShippingFee(saved.getShippingFee());
+        invoice.setTaxAmount(0.0);
+        invoice.setStatus("pending");
+        invoice.setIssuedAt(LocalDateTime.now());
+        invoice.setCreatedAt(LocalDateTime.now());
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        if (saved.getItems() != null) {
+            for (OrderItem item : saved.getItems()) {
+                InvoiceDetail detail = new InvoiceDetail();
+                detail.setInvoiceId(savedInvoice.getId());
+                detail.setProductName(item.getProductName());
+                detail.setQuantity(item.getQuantity());
+                detail.setUnitPrice(item.getPrice());
+                detail.setTotalPrice(item.getSubtotal());
+                invoiceDetailRepository.save(detail);
+            }
+        }
+
+        PaymentTransaction txn = new PaymentTransaction();
+        txn.setOrderId(saved.getId());
+        txn.setTransactionCode("TXN-" + System.currentTimeMillis());
+        txn.setPaymentMethod(saved.getPaymentMethod());
+        txn.setAmount(saved.getTotalAmount());
+        txn.setStatus(saved.getPaymentStatus());
+        txn.setCreatedAt(LocalDateTime.now());
+        paymentTransactionRepository.save(txn);
+
         return saved;
     }
 
@@ -118,6 +166,14 @@ public class OrderController {
             });
             Order saved = orderRepository.save(order);
             saveHistory(saved.getId(), order.getStatus(), order.getStatus(), longDriverId, "Giao tài xế #" + longDriverId);
+
+            DeliveryTrip trip = new DeliveryTrip();
+            trip.setOrderId(longId);
+            trip.setDriverId(longDriverId);
+            trip.setStatus("assigned");
+            trip.setCreatedAt(LocalDateTime.now());
+            deliveryTripRepository.save(trip);
+
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
