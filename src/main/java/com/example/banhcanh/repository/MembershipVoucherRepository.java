@@ -9,4 +9,5 @@ import java.util.List;
 public interface MembershipVoucherRepository extends JpaRepository<MembershipVoucher, Long> {
     List<MembershipVoucher> findByUserIdOrderByIssuedAtDesc(Long userId);
     List<MembershipVoucher> findByUserIdAndStatus(Long userId, String status);
+    List<MembershipVoucher> findByTierIdOrderByIssuedAtDesc(Long tierId);
 }
