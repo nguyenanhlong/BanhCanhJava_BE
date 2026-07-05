@@ -94,6 +94,45 @@ public class MembershipController {
         return ResponseEntity.ok(voucherRepo.save(v));
     }
 
+    // --- Admin endpoints ---
+    @GetMapping("/admin/all")
+    public ResponseEntity<?> getAllMemberships() {
+        return ResponseEntity.ok(membershipRepo.findAll());
+    }
+
+    @GetMapping("/admin/vouchers")
+    public ResponseEntity<?> getAllVouchers(@RequestParam(required = false) Long tierId) {
+        if (tierId != null) {
+            return ResponseEntity.ok(voucherRepo.findByTierIdOrderByIssuedAtDesc(tierId));
+        }
+        return ResponseEntity.ok(voucherRepo.findAll());
+    }
+
+    @PostMapping("/admin/vouchers")
+    public ResponseEntity<?> adminCreateVoucher(@RequestBody Map<String, Object> body) {
+        Long userId = body.get("userId") != null ? Long.valueOf(body.get("userId").toString()) : null;
+        Long tierId = body.get("tierId") != null ? Long.valueOf(body.get("tierId").toString()) : null;
+        Double discountPercent = body.get("discountPercent") != null ? Double.valueOf(body.get("discountPercent").toString()) : 10.0;
+        Double maxDiscount = body.get("maxDiscount") != null ? Double.valueOf(body.get("maxDiscount").toString()) : 50000.0;
+        Double minOrderAmount = body.get("minOrderAmount") != null ? Double.valueOf(body.get("minOrderAmount").toString()) : 0.0;
+
+        if (userId == null || tierId == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId và tierId là bắt buộc"));
+        }
+
+        MembershipVoucher v = new MembershipVoucher();
+        v.setUserId(userId);
+        v.setTierId(tierId);
+        v.setCode("ADM" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        v.setDiscountPercent(discountPercent);
+        v.setMaxDiscount(maxDiscount);
+        v.setMinOrderAmount(minOrderAmount);
+        v.setStatus("available");
+        v.setIssuedAt(LocalDateTime.now());
+        v.setExpiresAt(LocalDateTime.now().plusDays(30));
+        return ResponseEntity.ok(voucherRepo.save(v));
+    }
+
     @PutMapping("/vouchers/{voucherId}/use")
     public ResponseEntity<?> useVoucher(@PathVariable String voucherId) {
         Long longId;

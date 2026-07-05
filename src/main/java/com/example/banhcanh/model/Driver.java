@@ -30,7 +30,8 @@ public class Driver {
     @Column(name = "vehicle_color", length = 50)
     private String vehicleColor;
 
-    @Column(name = "avatar_url", length = 500)
+    @Lob
+    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
     private String avatarUrl;
 
     @Column(length = 100)
