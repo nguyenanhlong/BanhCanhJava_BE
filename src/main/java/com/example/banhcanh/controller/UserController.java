@@ -70,8 +70,8 @@ public class UserController {
     @PutMapping("/{id}/role")
     public ResponseEntity<?> changeUserRole(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String newRole = body.get("role");
-        if (newRole == null || (!newRole.equals("customer") && !newRole.equals("driver") && !newRole.equals("admin"))) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Vai trò không hợp lệ. Chấp nhận: customer, driver, admin"));
+        if (newRole == null || (!newRole.equals("customer") && !newRole.equals("driver") && !newRole.equals("admin") && !newRole.equals("super_admin"))) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Vai trò không hợp lệ. Chấp nhận: customer, driver, admin, super_admin"));
         }
         return userRepository.findById(id).map(user -> {
             user.setRole(newRole);
