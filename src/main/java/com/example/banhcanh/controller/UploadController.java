@@ -15,9 +15,6 @@ public class UploadController {
     @Autowired
     private S3Service s3Service;
 
-    @Autowired
-    private DriverRepository driverRepository;
-
     @PostMapping("/image")
     public ResponseEntity<?> uploadImage(
             @RequestParam("file") MultipartFile file,
