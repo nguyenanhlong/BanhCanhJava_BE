@@ -46,13 +46,28 @@ public class S3Service {
     }
 
     public String uploadFile(MultipartFile file, String folder) {
+        return uploadFile(file, folder, null, null);
+    }
+
+    public String uploadFile(MultipartFile file, String folder, String entityId, String entityName) {
         try {
             String originalName = file.getOriginalFilename();
             String ext = "";
             if (originalName != null && originalName.contains(".")) {
                 ext = originalName.substring(originalName.lastIndexOf("."));
             }
-            String key = folder + "/" + UUID.randomUUID().toString() + ext;
+            StringBuilder subfolder = new StringBuilder();
+            if (entityId != null && !entityId.isBlank()) {
+                subfolder.append(entityId);
+            } else {
+                subfolder.append("new");
+            }
+            if (entityName != null && !entityName.isBlank()) {
+                subfolder.append("_").append(entityName.replaceAll("[^a-zA-Z0-9_\\-\\p{L}]", "_"));
+            } else {
+                subfolder.append("_").append(UUID.randomUUID().toString());
+            }
+            String key = folder + "/" + subfolder.toString() + "/" + UUID.randomUUID().toString() + ext;
 
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucketName)

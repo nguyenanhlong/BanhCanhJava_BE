@@ -18,7 +18,9 @@ public class UploadController {
     @PostMapping("/image")
     public ResponseEntity<?> uploadImage(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("folder") String folder) {
+            @RequestParam("folder") String folder,
+            @RequestParam(value = "id", required = false) String entityId,
+            @RequestParam(value = "name", required = false) String entityName) {
 
         String[] allowedFolders = {"product_Image", "avatar_Image", "review_Image", "category_Image"};
         boolean valid = false;
@@ -30,7 +32,7 @@ public class UploadController {
         }
 
         try {
-            String url = s3Service.uploadFile(file, folder);
+            String url = s3Service.uploadFile(file, folder, entityId, entityName);
             return ResponseEntity.ok(Map.of(
                 "url", url,
                 "folder", folder
