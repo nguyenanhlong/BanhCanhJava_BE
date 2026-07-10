@@ -10,26 +10,14 @@ services:
       - key: PORT
         value: 8080
       - key: SPRING_DATASOURCE_URL
-        fromDatabase:
-          name: banhcanh-db
-          property: connectionString
+        value: jdbc:postgresql://db.yrzsuspxgiggepfnzqgi.supabase.co:5432/postgres?sslmode=require
       - key: SPRING_DATASOURCE_USERNAME
-        fromDatabase:
-          name: banhcanh-db
-          property: user
+        value: postgres
       - key: SPRING_DATASOURCE_PASSWORD
-        fromDatabase:
-          name: banhcanh-db
-          property: password
+        value: .Deonoiok123
       - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
         value: org.postgresql.Driver
       - key: SPRING_JPA_DATABASE_PLATFORM
         value: org.hibernate.dialect.PostgreSQLDialect
       - key: JAVA_OPTS
         value: -XX:+UseContainerSupport
-
-databases:
-  - name: banhcanh-db
-    databaseName: banhcanh
-    user: banhcanh
-    plan: free
