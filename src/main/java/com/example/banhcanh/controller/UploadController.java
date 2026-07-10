@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.util.Map;
 
 @RestController
@@ -37,6 +38,18 @@ public class UploadController {
                 "url", url,
                 "folder", folder
             ));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/presigned")
+    public ResponseEntity<?> getPresignedUrl(
+            @RequestParam("key") String key,
+            @RequestParam(value = "expireHours", defaultValue = "24") int expireHours) {
+        try {
+            String url = s3Service.getPresignedUrl(key, Duration.ofHours(expireHours));
+            return ResponseEntity.ok(Map.of("url", url, "key", key));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }

@@ -10,8 +10,12 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.UUID;
 
 @Service
@@ -33,6 +37,7 @@ public class S3Service {
     private String endpoint;
 
     private S3Client s3Client;
+    private S3Presigner presigner;
 
     @PostConstruct
     public void init() {
@@ -44,28 +49,30 @@ public class S3Service {
                 .forcePathStyle(true)
                 .build();
 
-        setPublicReadPolicy();
+        this.presigner = S3Presigner.builder()
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .endpointOverride(URI.create(endpoint))
+                .build();
     }
 
-    private void setPublicReadPolicy() {
-        try {
-            String policy = """
-                {
-                  "Version": "2012-10-17",
-                  "Statement": [{
-                    "Sid": "PublicReadGetObject",
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": "s3:GetObject",
-                    "Resource": "arn:aws:s3:::%s/*"
-                  }]
-                }
-                """.formatted(bucketName);
+    public String getPresignedUrl(String key, Duration expiration) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
 
-            s3Client.putBucketPolicy(b -> b.bucket(bucketName).policy(policy));
-        } catch (Exception e) {
-            System.err.println("Không thể đặt bucket policy: " + e.getMessage());
-        }
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(expiration)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return presigner.presignGetObject(presignRequest).url().toString();
+    }
+
+    public String getPresignedUrl(String key) {
+        return getPresignedUrl(key, Duration.ofHours(24));
     }
 
     public String uploadFile(MultipartFile file, String folder) {
@@ -86,7 +93,8 @@ public class S3Service {
                 subfolder.append("new");
             }
             if (entityName != null && !entityName.isBlank()) {
-                subfolder.append("_").append(entityName.replaceAll("[^a-zA-Z0-9_\\-\\p{L}]", "_"));
+                String slug = slugify(entityName);
+                subfolder.append("_").append(slug);
             } else {
                 subfolder.append("_").append(UUID.randomUUID().toString());
             }
@@ -104,5 +112,11 @@ public class S3Service {
         } catch (Exception e) {
             throw new RuntimeException("Không thể tải file lên S3: " + e.getMessage(), e);
         }
+    }
+
+    private String slugify(String input) {
+        String normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 }
