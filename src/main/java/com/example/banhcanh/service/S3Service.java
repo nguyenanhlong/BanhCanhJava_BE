@@ -43,6 +43,29 @@ public class S3Service {
                 .endpointOverride(URI.create(endpoint))
                 .forcePathStyle(true)
                 .build();
+
+        setPublicReadPolicy();
+    }
+
+    private void setPublicReadPolicy() {
+        try {
+            String policy = """
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                    "Sid": "PublicReadGetObject",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "s3:GetObject",
+                    "Resource": "arn:aws:s3:::%s/*"
+                  }]
+                }
+                """.formatted(bucketName);
+
+            s3Client.putBucketPolicy(b -> b.bucket(bucketName).policy(policy));
+        } catch (Exception e) {
+            System.err.println("Không thể đặt bucket policy: " + e.getMessage());
+        }
     }
 
     public String uploadFile(MultipartFile file, String folder) {
