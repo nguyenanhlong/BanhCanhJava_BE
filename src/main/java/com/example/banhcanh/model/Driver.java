@@ -31,7 +31,7 @@ public class Driver {
     private String vehicleColor;
 
     @Lob
-    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
     @Column(length = 100)
