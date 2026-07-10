@@ -36,6 +36,13 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Driver PostgreSQL cho Render / PostgreSQL hosting -->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- Lombok giúp tự động sinh Getter, Setter, Constructor, Builder... -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
