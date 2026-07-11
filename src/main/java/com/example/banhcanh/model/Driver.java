@@ -2,13 +2,7 @@ package com.example.banhcanh.model;
 
 import java.time.LocalDateTime;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Data;
 
 @Data
@@ -22,10 +16,14 @@ public class Driver {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    private User user;
+
+    @Transient
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Transient
     private String phone;
 
     @Column(name = "vehicle_type", length = 50)
@@ -40,7 +38,7 @@ public class Driver {
     @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
-    @Column(length = 100)
+    @Transient
     private String vehicle;
 
     @Column(length = 50, nullable = false)
@@ -72,4 +70,23 @@ public class Driver {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @PostLoad
+    public void loadFromUser() {
+        if (user != null) {
+            if (this.name == null || this.name.isBlank()) {
+                this.name = user.getFullName() != null ? user.getFullName() : user.getUsername();
+            }
+            if (this.phone == null || this.phone.isBlank()) {
+                this.phone = user.getPhone();
+            }
+            if (this.avatarUrl == null || this.avatarUrl.isBlank()) {
+                this.avatarUrl = user.getAvatarUrl();
+            }
+        }
+        if (this.vehicle == null || this.vehicle.isBlank()) {
+            this.vehicle = (vehicleType != null ? vehicleType : "Xe máy")
+                    + (vehiclePlate != null && !vehiclePlate.isBlank() ? " - " + vehiclePlate : "");
+        }
+    }
 }
