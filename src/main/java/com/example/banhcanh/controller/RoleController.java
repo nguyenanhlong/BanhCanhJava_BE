@@ -20,6 +20,9 @@ public class RoleController {
     @Autowired
     private UserRoleRepository userRoleRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     // --- ROLES ---
 
     @GetMapping("/roles")
@@ -118,13 +121,38 @@ public class RoleController {
         userRole.setUserId(userId);
         userRole.setRoleId(roleId);
         userRoleRepository.save(userRole);
+        syncUserRoleField(userId);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/users/{userId}/roles/{roleId}")
     public ResponseEntity<Void> removeRoleFromUser(@PathVariable Long userId, @PathVariable Long roleId) {
         userRoleRepository.deleteByUserIdAndRoleId(userId, roleId);
+        syncUserRoleField(userId);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Sync User.role String field with the highest-privilege role from user_roles table.
+     */
+    private void syncUserRoleField(Long userId) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) return;
+        User user = userOpt.get();
+        List<UserRole> userRoles = userRoleRepository.findByUserId(userId);
+        String highestRole = "customer";
+        for (UserRole ur : userRoles) {
+            Optional<Role> roleOpt = roleRepository.findById(ur.getRoleId());
+            if (roleOpt.isPresent()) {
+                String name = roleOpt.get().getName().toUpperCase();
+                if (name.equals("SUPER_ADMIN")) { highestRole = "super_admin"; break; }
+                if (name.equals("ADMIN")) highestRole = "admin";
+                else if (name.equals("DRIVER") && !highestRole.equals("admin")) highestRole = "driver";
+            }
+        }
+        user.setRole(highestRole);
+        user.setUpdatedAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
     }
 
     // --- CURRENT USER PERMISSIONS ---
