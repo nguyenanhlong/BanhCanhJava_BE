@@ -9,6 +9,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -27,13 +28,13 @@ public class S3Service {
     @Value("${s3.secret-key}")
     private String secretKey;
 
-    @Value("${s3.region:auto}")
+    @Value("${s3.region:ap-southeast-2}")
     private String region;
 
     @Value("${s3.bucket-name}")
     private String bucketName;
 
-    @Value("${s3.endpoint:https://s3.auto.railway.app}")
+    @Value("${s3.endpoint:https://yrzsuspxgiggepfnzqgi.storage.supabase.co/storage/v1/s3}")
     private String endpoint;
 
     private S3Client s3Client;
@@ -54,6 +55,9 @@ public class S3Service {
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))
                 .endpointOverride(URI.create(endpoint))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(true)
+                        .build())
                 .build();
     }
 
@@ -108,7 +112,8 @@ public class S3Service {
 
             s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
-            return endpoint + "/" + bucketName + "/" + key;
+            // Return key only - frontend will get presigned URL via /api/upload/presigned
+            return key;
         } catch (Exception e) {
             throw new RuntimeException("Không thể tải file lên S3: " + e.getMessage(), e);
         }
