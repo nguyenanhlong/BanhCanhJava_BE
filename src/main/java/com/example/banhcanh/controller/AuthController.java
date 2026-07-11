@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -54,13 +55,15 @@ public class AuthController {
         return userRepository.findByUsername(username)
             .map(user -> {
                 if (passwordEncoder.matches(password, user.getPassword())) {
-                    String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
+                    // Determine effective role from user_roles table (RBAC), fallback to User.role String
+                    String effectiveRole = resolveEffectiveRole(user);
+                    String token = jwtUtil.generateToken(user.getId(), user.getUsername(), effectiveRole);
                     Map<String, Object> response = new HashMap<>();
                     response.put("token", token);
                     response.put("id", user.getId().toString());
                     response.put("username", user.getUsername());
                     response.put("email", user.getEmail());
-                    response.put("role", user.getRole());
+                    response.put("role", effectiveRole);
                     response.put("fullName", user.getFullName());
                     response.put("phone", user.getPhone());
                     response.put("address", user.getAddress());
@@ -125,5 +128,29 @@ public class AuthController {
                 return ResponseEntity.ok(Map.of("message", "Mật khẩu đã được đặt lại thành công"));
             }).orElse(ResponseEntity.badRequest().body(Map.of("error", "Người dùng không tồn tại")));
         }).orElse(ResponseEntity.badRequest().body(Map.of("error", "Mã đặt lại mật khẩu không hợp lệ")));
+    }
+
+    /**
+     * Resolve the effective role from User.roles (RBAC table).
+     * Priority: SUPER_ADMIN > ADMIN > DRIVER > CUSTOMER.
+     * Falls back to User.role String field if no roles in user_roles table.
+     */
+    private String resolveEffectiveRole(User user) {
+        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+            for (String priority : List.of("SUPER_ADMIN", "ADMIN", "DRIVER")) {
+                for (var r : user.getRoles()) {
+                    if (r.getName().equalsIgnoreCase(priority) && Boolean.TRUE.equals(r.getIsActive())) {
+                        return r.getName().toUpperCase();
+                    }
+                }
+            }
+            // Return the first active role found
+            for (var r : user.getRoles()) {
+                if (Boolean.TRUE.equals(r.getIsActive())) {
+                    return r.getName().toUpperCase();
+                }
+            }
+        }
+        return user.getRole();
     }
 }
