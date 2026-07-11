@@ -47,14 +47,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // Load roles from DB (User.roles via user_roles table)
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
                 Optional<User> userOpt = userRepository.findById(userId);
-                if (userOpt.isPresent() && userOpt.get().getRoles() != null) {
-                    for (var role : userOpt.get().getRoles()) {
-                        if (Boolean.TRUE.equals(role.getIsActive())) {
-                            authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName().toUpperCase()));
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    // 1) Roles from RBAC table (user_roles)
+                    if (user.getRoles() != null) {
+                        for (var role : user.getRoles()) {
+                            if (Boolean.TRUE.equals(role.getIsActive())) {
+                                authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName().toUpperCase()));
+                            }
+                        }
+                    }
+                    // 2) Role from User.role String field (always included)
+                    if (user.getRole() != null) {
+                        String stringRole = "ROLE_" + user.getRole().toUpperCase();
+                        boolean alreadyHas = authorities.stream()
+                                .anyMatch(a -> a.getAuthority().equals(stringRole));
+                        if (!alreadyHas) {
+                            authorities.add(new SimpleGrantedAuthority(stringRole));
                         }
                     }
                 }
-                // Fallback: use JWT role claim if no DB roles found
+                // Final fallback: use JWT role claim
                 if (authorities.isEmpty()) {
                     String fallbackRole = (jwtRole == null) ? "CUSTOMER" : jwtRole.toUpperCase();
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + fallbackRole));
