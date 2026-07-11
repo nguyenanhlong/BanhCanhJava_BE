@@ -30,7 +30,7 @@ public class UploadController {
             ));
         }
 
-        String[] allowedFolders = {"product_Image", "avatar_Image", "review_Image", "category_Image"};
+        String[] allowedFolders = {"product_Image", "avatar_Image", "review_Image", "category_Image", "payment_Image"};
         boolean valid = false;
         for (String f : allowedFolders) {
             if (f.equals(folder)) { valid = true; break; }
