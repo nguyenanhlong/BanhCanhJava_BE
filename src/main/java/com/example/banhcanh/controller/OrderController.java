@@ -2,8 +2,10 @@ package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.*;
 import com.example.banhcanh.repository.*;
+import com.example.banhcanh.security.AuthenticatedUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -49,6 +51,17 @@ public class OrderController {
             .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getByUser(@PathVariable String userId, @AuthenticationPrincipal AuthenticatedUser principal) {
+        Long longUserId;
+        try { longUserId = Long.parseLong(userId); }
+        catch (NumberFormatException e) { return ResponseEntity.badRequest().body(Map.of("error", "ID người dùng không hợp lệ: '" + userId + "' phải là số")); }
+        if (principal == null || (!principal.isAdmin() && !principal.userId().equals(longUserId))) {
+            return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền xem đơn hàng của người dùng khác"));
+        }
+        return ResponseEntity.ok(orderRepository.findByUserIdOrderByCreatedAtDesc(longUserId));
+    }
+
     @GetMapping("/stats")
     public Map<String, Object> getOrderStats() {
         List<Order> allOrders = orderRepository.findAll();
@@ -68,7 +81,13 @@ public class OrderController {
     }
 
     @PostMapping
-    public Order createOrder(@RequestBody Order order) {
+    public Order createOrder(@RequestBody Order order, @AuthenticationPrincipal AuthenticatedUser principal) {
+        // POST /api/orders is public (hỗ trợ khách vãng lai đặt hàng không cần đăng nhập), nhưng
+        // nếu người gọi ĐÃ đăng nhập, luôn dùng userId từ JWT — không tin userId client tự gửi lên,
+        // để không ai mạo danh gán đơn hàng cho tài khoản người khác.
+        if (principal != null) {
+            order.setUserId(principal.userId());
+        }
         order.setStatus("pending");
         if ("cod".equals(order.getPaymentMethod())) {
             order.setPaymentStatus("pending");
@@ -120,6 +139,9 @@ public class OrderController {
         return saved;
     }
 
+    private static final java.util.Set<String> VALID_STATUSES = java.util.Set.of(
+        "pending", "confirmed", "preparing", "picked_up", "shipping", "delivered", "completed", "cancelled");
+
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam String status) {
         Long longId;
@@ -128,10 +150,25 @@ public class OrderController {
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "ID đơn hàng không hợp lệ: '" + id + "' phải là số"));
         }
+        if (!VALID_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Trạng thái không hợp lệ: " + status));
+        }
         return orderRepository.findById(longId).map(order -> {
             String oldStatus = order.getStatus();
             order.setStatus(status);
-            if ("completed".equals(status) || "cancelled".equals(status)) {
+            // Shipper xác nhận giao xong ("delivered") hoặc đơn kết thúc: giải phóng tài xế về
+            // trạng thái sẵn sàng và đóng chuyến giao còn dang dở (nếu có) để tài xế không bị
+            // kẹt ở trạng thái "đang có chuyến giao".
+            if ("delivered".equals(status) || "completed".equals(status) || "cancelled".equals(status)) {
+                String tripStatus = "cancelled".equals(status) ? "cancelled" : "delivered";
+                deliveryTripRepository.findByOrderId(order.getId()).forEach(trip -> {
+                    if ("assigned".equals(trip.getStatus()) || "accepted".equals(trip.getStatus()) || "picked_up".equals(trip.getStatus())) {
+                        trip.setStatus(tripStatus);
+                        trip.setUpdatedAt(LocalDateTime.now());
+                        if ("delivered".equals(tripStatus)) trip.setDeliveredAt(LocalDateTime.now());
+                        deliveryTripRepository.save(trip);
+                    }
+                });
                 if (order.getDriverId() != null) {
                     driverRepository.findById(order.getDriverId()).ifPresent(driver -> {
                         driver.setStatus("available");
@@ -139,8 +176,37 @@ public class OrderController {
                     });
                 }
             }
+            if ("delivered".equals(status)) {
+                order.setDeliveryProgress(100);
+            }
             Order saved = orderRepository.save(order);
             saveHistory(saved.getId(), oldStatus, status, 0L, "Cập nhật trạng thái");
+            return ResponseEntity.ok(saved);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/progress")
+    public ResponseEntity<?> updateProgress(@PathVariable String id,
+                                            @RequestParam Integer progress,
+                                            @RequestParam(required = false) String stage) {
+        Long longId;
+        try {
+            longId = Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ID đơn hàng không hợp lệ: '" + id + "' phải là số"));
+        }
+        if (progress < 0 || progress > 100) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tiến trình phải nằm trong khoảng 0-100"));
+        }
+        return orderRepository.findById(longId).<ResponseEntity<?>>map(order -> {
+            int current = order.getDeliveryProgress() != null ? order.getDeliveryProgress() : 0;
+            if (progress < current) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Không thể giảm tiến trình giao hàng (hiện tại " + current + "%, yêu cầu " + progress + "%)"));
+            }
+            order.setDeliveryProgress(progress);
+            if (stage != null && !stage.isBlank()) order.setDeliveryStage(stage);
+            Order saved = orderRepository.save(order);
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -158,12 +224,27 @@ public class OrderController {
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "ID tài xế không hợp lệ: '" + driverId + "' phải là số"));
         }
-        return orderRepository.findById(longId).map(order -> {
+        return orderRepository.findById(longId).<ResponseEntity<?>>map(order -> {
+            // Mỗi đơn hàng chỉ được phân công đúng một tài xế.
+            if (order.getDriverId() != null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Đơn hàng đã được phân công cho tài xế #" + order.getDriverId()));
+            }
+            if ("completed".equals(order.getStatus()) || "cancelled".equals(order.getStatus()) || "delivered".equals(order.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Đơn hàng đã kết thúc, không thể phân công tài xế"));
+            }
+            Driver driver = driverRepository.findById(longDriverId).orElse(null);
+            if (driver == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Không tìm thấy tài xế #" + longDriverId));
+            }
+            // Chỉ tài xế đang ở trạng thái sẵn sàng mới được nhận đơn.
+            if (!"available".equals(driver.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Tài xế " + driver.getName() + " không ở trạng thái sẵn sàng (hiện tại: " + driver.getStatus() + ")"));
+            }
             order.setDriverId(longDriverId);
-            driverRepository.findById(longDriverId).ifPresent(driver -> {
-                driver.setStatus("busy");
-                driverRepository.save(driver);
-            });
+            driver.setStatus("busy");
+            driverRepository.save(driver);
             Order saved = orderRepository.save(order);
             saveHistory(saved.getId(), order.getStatus(), order.getStatus(), longDriverId, "Giao tài xế #" + longDriverId);
 

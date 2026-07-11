@@ -6,8 +6,11 @@ import com.example.banhcanh.model.User;
 import com.example.banhcanh.repository.DriverRepository;
 import com.example.banhcanh.repository.DeliveryTripRepository;
 import com.example.banhcanh.repository.UserRepository;
+import com.example.banhcanh.security.AuthenticatedUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +27,9 @@ public class DriverController {
 
     @Autowired
     private DeliveryTripRepository tripRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerDriver(@RequestBody Map<String, Object> body) {
@@ -44,7 +50,7 @@ public class DriverController {
 
             User user = new User();
             user.setUsername(username);
-            user.setPassword(password);
+            user.setPassword(passwordEncoder.encode(password));
             user.setEmail(email);
             user.setRole("driver");
             user.setFullName((String) body.getOrDefault("fullName", body.get("name")));
@@ -112,7 +118,8 @@ public class DriverController {
             if (body.containsKey("vehiclePlate")) driver.setVehiclePlate((String) body.get("vehiclePlate"));
             if (body.containsKey("vehicleColor")) driver.setVehicleColor((String) body.get("vehicleColor"));
             if (body.containsKey("avatarUrl")) driver.setAvatarUrl((String) body.get("avatarUrl"));
-            if (body.containsKey("status")) driver.setStatus((String) body.get("status"));
+            // Trạng thái tài xế do hệ thống quản lý (phân công/giao xong) hoặc tài xế tự chọn
+            // qua PUT /{id}/status — không cho chỉnh qua form cập nhật thông tin chung.
             if (body.containsKey("vehicle")) driver.setVehicle((String) body.get("vehicle"));
 
             // Update password in associated User record
@@ -122,7 +129,7 @@ public class DriverController {
                     Long userId = driver.getUserId();
                     if (userId != null) {
                         userRepository.findById(userId).ifPresent(user -> {
-                            user.setPassword(newPassword);
+                            user.setPassword(passwordEncoder.encode(newPassword));
                             userRepository.save(user);
                         });
                     }
@@ -134,8 +141,24 @@ public class DriverController {
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<Driver> updateDriverStatus(@PathVariable Long id, @RequestParam String status) {
-        return driverRepository.findById(id).map(driver -> {
+    public ResponseEntity<?> updateDriverStatus(@PathVariable Long id, @RequestParam String status,
+                                                 @AuthenticationPrincipal AuthenticatedUser principal) {
+        // Tài xế chỉ được tự chọn "available" (sẵn sàng) hoặc "offline" (nghỉ).
+        // "busy" do hệ thống tự đặt khi được phân công đơn — không cho đặt tay.
+        if (!"available".equals(status) && !"offline".equals(status)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Trạng thái không hợp lệ: chỉ được chọn 'available' hoặc 'offline'"));
+        }
+        return driverRepository.findById(id).<ResponseEntity<?>>map(driver -> {
+            if (principal == null || (!principal.isAdmin() && !principal.userId().equals(driver.getUserId()))) {
+                return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền đổi trạng thái của tài xế này"));
+            }
+            boolean hasActiveTrip = tripRepository.findByDriverIdOrderByCreatedAtDesc(id).stream()
+                .anyMatch(t -> "assigned".equals(t.getStatus()) || "accepted".equals(t.getStatus()) || "picked_up".equals(t.getStatus()));
+            if (hasActiveTrip) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Tài xế đang có chuyến giao hàng chưa hoàn tất, không thể đổi trạng thái"));
+            }
             driver.setStatus(status);
             return ResponseEntity.ok(driverRepository.save(driver));
         }).orElse(ResponseEntity.notFound().build());

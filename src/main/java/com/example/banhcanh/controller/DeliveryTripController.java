@@ -91,6 +91,14 @@ public class DeliveryTripController {
                 trip.setCurrentLng(lng);
             }
 
+            // Chuyến giao kết thúc → giải phóng tài xế về trạng thái sẵn sàng.
+            if ("delivered".equals(status) || "cancelled".equals(status)) {
+                driverRepository.findById(trip.getDriverId()).ifPresent(driver -> {
+                    driver.setStatus("available");
+                    driverRepository.save(driver);
+                });
+            }
+
             return ResponseEntity.ok(repo.save(trip));
         }).orElse(ResponseEntity.notFound().build());
     }

@@ -55,6 +55,12 @@ public class Order {
     @Column(name = "driver_id")
     private Long driverId;
 
+    @Column(name = "delivery_progress")
+    private Integer deliveryProgress = 0;
+
+    @Column(name = "delivery_stage", length = 100)
+    private String deliveryStage;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

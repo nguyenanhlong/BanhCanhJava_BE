@@ -1,5 +1,6 @@
 package com.example.banhcanh.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -16,6 +17,9 @@ public class User {
     @Column(nullable = false, unique = true)
     private String username;
 
+    // Accepted on the way in (register/login request bodies) but never serialized back out
+    // in any API response — the BCrypt hash has no business leaving the server.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = false)
     private String password;
 
