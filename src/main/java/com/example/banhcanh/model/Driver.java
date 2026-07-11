@@ -37,7 +37,6 @@ public class Driver {
     @Column(name = "vehicle_color", length = 50)
     private String vehicleColor;
 
-    @Lob
     @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
