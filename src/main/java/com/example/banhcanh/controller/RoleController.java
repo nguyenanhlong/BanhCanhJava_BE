@@ -144,7 +144,8 @@ public class RoleController {
         for (UserRole ur : userRoles) {
             Optional<Role> roleOpt = roleRepository.findById(ur.getRoleId());
             if (roleOpt.isPresent()) {
-                String name = roleOpt.get().getName().toUpperCase();
+                String name = roleOpt.get().getName().toUpperCase(); // e.g. "ROLE_ADMIN"
+                if (name.startsWith("ROLE_")) name = name.substring(5);
                 if (name.equals("SUPER_ADMIN")) { highestRole = "super_admin"; break; }
                 if (name.equals("ADMIN")) highestRole = "admin";
                 else if (name.equals("DRIVER") && !highestRole.equals("admin")) highestRole = "driver";

@@ -49,11 +49,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Optional<User> userOpt = userRepository.findById(userId);
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
-                    // 1) Roles from RBAC table (user_roles)
+                    // 1) Roles from RBAC table (user_roles) — names already have ROLE_ prefix
                     if (user.getRoles() != null) {
                         for (var role : user.getRoles()) {
                             if (Boolean.TRUE.equals(role.getIsActive())) {
-                                authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName().toUpperCase()));
+                                String rn = role.getName().toUpperCase();
+                                if (!rn.startsWith("ROLE_")) rn = "ROLE_" + rn;
+                                authorities.add(new SimpleGrantedAuthority(rn));
                             }
                         }
                     }
