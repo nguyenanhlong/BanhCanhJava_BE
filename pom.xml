@@ -95,6 +95,12 @@
 			<artifactId>s3</artifactId>
 			<version>2.24.13</version>
 		</dependency>
+
+		<!-- Spring Mail: gửi OTP & thông báo đơn hàng qua SMTP -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

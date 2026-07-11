@@ -5,6 +5,7 @@ import com.example.banhcanh.model.User;
 import com.example.banhcanh.repository.PasswordResetTokenRepository;
 import com.example.banhcanh.repository.UserRepository;
 import com.example.banhcanh.security.JwtUtil;
+import com.example.banhcanh.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -29,6 +29,9 @@ public class AuthController {
 
     @Autowired
     private PasswordResetTokenRepository tokenRepository;
+
+    @Autowired
+    private EmailService emailService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody User user) {
@@ -77,15 +80,23 @@ public class AuthController {
         }
         return userRepository.findByEmail(email).map(user -> {
             tokenRepository.deleteByUserId(user.getId());
-            String token = UUID.randomUUID().toString() + "-" + System.currentTimeMillis();
+            String otp = emailService.generateOtp();
             PasswordResetToken resetToken = new PasswordResetToken();
             resetToken.setUserId(user.getId());
-            resetToken.setToken(token);
+            resetToken.setToken(otp);
             resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(15));
             tokenRepository.save(resetToken);
+            try {
+                emailService.sendOtpEmail(email, otp);
+            } catch (Exception e) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "Không thể gửi email. Mã OTP của bạn: " + otp,
+                    "resetToken", otp,
+                    "email", email
+                ));
+            }
             return ResponseEntity.ok(Map.of(
-                "message", "Mã đặt lại mật khẩu đã được gửi đến email của bạn (bản demo: mã được trả về trong response)",
-                "resetToken", token,
+                "message", "Mã OTP đã được gửi đến email " + email + ". Vui lòng kiểm tra hộp thư đến.",
                 "email", email
             ));
         }).orElse(ResponseEntity.badRequest().body(Map.of("error", "Email không tồn tại trong hệ thống")));
