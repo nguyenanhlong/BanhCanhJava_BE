@@ -23,6 +23,13 @@ public class UploadController {
             @RequestParam(value = "id", required = false) String entityId,
             @RequestParam(value = "name", required = false) String entityName) {
 
+        // Kiểm tra S3 đã được cấu hình chưa
+        if (!s3Service.isConfigured()) {
+            return ResponseEntity.status(503).body(Map.of(
+                "error", "Tính năng tải ảnh chưa được cấu hình trên server. Vui lòng liên hệ quản trị viên để thiết lập Object Storage."
+            ));
+        }
+
         String[] allowedFolders = {"product_Image", "avatar_Image", "review_Image", "category_Image"};
         boolean valid = false;
         for (String f : allowedFolders) {

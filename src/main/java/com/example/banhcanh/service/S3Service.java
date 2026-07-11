@@ -38,26 +38,48 @@ public class S3Service {
 
     private S3Client s3Client;
     private S3Presigner presigner;
+    private boolean configured = false;
 
     @PostConstruct
     public void init() {
-        this.s3Client = S3Client.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)))
-                .endpointOverride(URI.create(endpoint))
-                .forcePathStyle(true)
-                .build();
+        // Kiểm tra nếu credentials là dummy/chưa được cấu hình
+        if (isDummy(accessKey) || isDummy(secretKey) || isDummy(bucketName) || isDummy(endpoint)) {
+            configured = false;
+            return;
+        }
+        try {
+            this.s3Client = S3Client.builder()
+                    .region(Region.of(region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(accessKey, secretKey)))
+                    .endpointOverride(URI.create(endpoint))
+                    .forcePathStyle(true)
+                    .build();
 
-        this.presigner = S3Presigner.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)))
-                .endpointOverride(URI.create(endpoint))
-                .build();
+            this.presigner = S3Presigner.builder()
+                    .region(Region.of(region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(accessKey, secretKey)))
+                    .endpointOverride(URI.create(endpoint))
+                    .build();
+            configured = true;
+        } catch (Exception e) {
+            configured = false;
+        }
+    }
+
+    private boolean isDummy(String value) {
+        return value == null || value.isBlank()
+                || value.startsWith("dummy")
+                || value.contains("dummy.example.com");
+    }
+
+    public boolean isConfigured() {
+        return configured;
     }
 
     public String getPresignedUrl(String key, Duration expiration) {
+        if (!configured) throw new RuntimeException("Dịch vụ lưu trữ file chưa được cấu hình trên server");
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
                 .key(key)
@@ -80,6 +102,10 @@ public class S3Service {
     }
 
     public String uploadFile(MultipartFile file, String folder, String entityId, String entityName) {
+        if (!configured) {
+            throw new RuntimeException("Dịch vụ lưu trữ file (S3/Object Storage) chưa được cấu hình. " +
+                    "Vui lòng thiết lập các biến môi trường: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET_NAME, AWS_ENDPOINT_URL trên Render.");
+        }
         try {
             String originalName = file.getOriginalFilename();
             String ext = "";
