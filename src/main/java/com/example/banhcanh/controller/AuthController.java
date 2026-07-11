@@ -137,7 +137,7 @@ public class AuthController {
      */
     private String resolveEffectiveRole(User user) {
         if (user.getRoles() != null && !user.getRoles().isEmpty()) {
-            for (String priority : List.of("SUPER_ADMIN", "ADMIN", "DRIVER")) {
+            for (String priority : List.of("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_DRIVER")) {
                 for (var r : user.getRoles()) {
                     if (r.getName().equalsIgnoreCase(priority) && Boolean.TRUE.equals(r.getIsActive())) {
                         return r.getName().toUpperCase();
