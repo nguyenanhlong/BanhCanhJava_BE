@@ -2,8 +2,10 @@ package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.User;
 import com.example.banhcanh.repository.UserRepository;
+import com.example.banhcanh.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,6 +17,12 @@ public class AuthController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody User user) {
         if (userRepository.existsByUsername(user.getUsername())) {
@@ -23,6 +31,7 @@ public class AuthController {
         if (userRepository.existsByEmail(user.getEmail())) {
             return ResponseEntity.badRequest().body("Email đã được đăng ký!");
         }
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         User savedUser = userRepository.save(user);
         return ResponseEntity.ok(savedUser);
     }
@@ -34,8 +43,10 @@ public class AuthController {
 
         return userRepository.findByUsername(username)
             .map(user -> {
-                if (user.getPassword().equals(password)) {
+                if (passwordEncoder.matches(password, user.getPassword())) {
+                    String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
                     Map<String, Object> response = new HashMap<>();
+                    response.put("token", token);
                     response.put("id", user.getId().toString());
                     response.put("username", user.getUsername());
                     response.put("email", user.getEmail());

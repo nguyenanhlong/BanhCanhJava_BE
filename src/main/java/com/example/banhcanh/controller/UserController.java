@@ -2,8 +2,11 @@ package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.User;
 import com.example.banhcanh.repository.UserRepository;
+import com.example.banhcanh.security.AuthenticatedUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
@@ -15,20 +18,34 @@ public class UserController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private boolean isSelfOrAdmin(AuthenticatedUser principal, Long targetId) {
+        return principal != null && (principal.isAdmin() || principal.userId().equals(targetId));
+    }
+
     @GetMapping
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+    public ResponseEntity<?> getUserById(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (!isSelfOrAdmin(principal, id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền xem thông tin tài khoản này"));
+        }
         return userRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updated) {
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updated,
+                                         @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (!isSelfOrAdmin(principal, id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền sửa tài khoản này"));
+        }
         return userRepository.findById(id).map(user -> {
             if (updated.getFullName() != null) user.setFullName(updated.getFullName());
             if (updated.getPhone() != null) user.setPhone(updated.getPhone());
@@ -40,17 +57,21 @@ public class UserController {
     }
 
     @PutMapping("/{id}/password")
-    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody Map<String, String> body,
+                                             @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (!isSelfOrAdmin(principal, id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền đổi mật khẩu tài khoản này"));
+        }
         String oldPassword = body.get("oldPassword");
         String newPassword = body.get("newPassword");
         if (oldPassword == null || newPassword == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Vui lòng nhập mật khẩu cũ và mới"));
         }
         return userRepository.findById(id).map(user -> {
-            if (!user.getPassword().equals(oldPassword)) {
+            if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Mật khẩu cũ không đúng"));
             }
-            user.setPassword(newPassword);
+            user.setPassword(passwordEncoder.encode(newPassword));
             user.setUpdatedAt(java.time.LocalDateTime.now());
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("message", "Đã đổi mật khẩu thành công"));
@@ -98,7 +119,7 @@ public class UserController {
             return ResponseEntity.badRequest().body(Map.of("error", "Mật khẩu mới phải có ít nhất 6 ký tự"));
         }
         return userRepository.findById(id).map(user -> {
-            user.setPassword(newPassword);
+            user.setPassword(passwordEncoder.encode(newPassword));
             user.setUpdatedAt(java.time.LocalDateTime.now());
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("message", "Đã đặt lại mật khẩu thành công"));
