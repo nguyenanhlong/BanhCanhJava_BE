@@ -47,10 +47,17 @@ public class UserController {
             return ResponseEntity.status(403).body(Map.of("error", "Bạn không có quyền sửa tài khoản này"));
         }
         return userRepository.findById(id).map(user -> {
+            String newEmail = updated.getEmail();
+            if (newEmail != null && !newEmail.equals(user.getEmail())) {
+                if (userRepository.findByEmail(newEmail).isPresent()) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Email đã được sử dụng bởi tài khoản khác"));
+                }
+                user.setEmail(newEmail);
+            }
             if (updated.getFullName() != null) user.setFullName(updated.getFullName());
             if (updated.getPhone() != null) user.setPhone(updated.getPhone());
             if (updated.getAddress() != null) user.setAddress(updated.getAddress());
-            if (updated.getEmail() != null) user.setEmail(updated.getEmail());
+            if (updated.getAvatarUrl() != null) user.setAvatarUrl(updated.getAvatarUrl());
             user.setUpdatedAt(java.time.LocalDateTime.now());
             return ResponseEntity.ok(userRepository.save(user));
         }).orElse(ResponseEntity.notFound().build());

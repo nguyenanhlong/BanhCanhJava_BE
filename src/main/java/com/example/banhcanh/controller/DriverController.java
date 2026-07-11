@@ -112,28 +112,43 @@ public class DriverController {
         try { longId = Long.parseLong(id); }
         catch (NumberFormatException e) { return ResponseEntity.badRequest().body(Map.of("error", "ID không hợp lệ")); }
         return driverRepository.findById(longId).map(driver -> {
-            if (body.containsKey("name")) driver.setName((String) body.get("name"));
-            if (body.containsKey("phone")) driver.setPhone((String) body.get("phone"));
             if (body.containsKey("vehicleType")) driver.setVehicleType((String) body.get("vehicleType"));
             if (body.containsKey("vehiclePlate")) driver.setVehiclePlate((String) body.get("vehiclePlate"));
             if (body.containsKey("vehicleColor")) driver.setVehicleColor((String) body.get("vehicleColor"));
             if (body.containsKey("avatarUrl")) driver.setAvatarUrl((String) body.get("avatarUrl"));
-            // Trạng thái tài xế do hệ thống quản lý (phân công/giao xong) hoặc tài xế tự chọn
-            // qua PUT /{id}/status — không cho chỉnh qua form cập nhật thông tin chung.
             if (body.containsKey("vehicle")) driver.setVehicle((String) body.get("vehicle"));
 
-            // Update password in associated User record
-            if (body.containsKey("password")) {
-                String newPassword = (String) body.get("password");
-                if (newPassword != null && !newPassword.isBlank()) {
-                    Long userId = driver.getUserId();
-                    if (userId != null) {
-                        userRepository.findById(userId).ifPresent(user -> {
-                            user.setPassword(passwordEncoder.encode(newPassword));
-                            userRepository.save(user);
-                        });
+            // Sync name/phone/avatar/password with the associated User record
+            Long userId = driver.getUserId();
+            if (userId != null) {
+                userRepository.findById(userId).ifPresent(user -> {
+                    boolean userUpdated = false;
+                    if (body.containsKey("name")) {
+                        driver.setName((String) body.get("name"));
+                        user.setFullName((String) body.get("name"));
+                        userUpdated = true;
                     }
-                }
+                    if (body.containsKey("phone")) {
+                        driver.setPhone((String) body.get("phone"));
+                        user.setPhone((String) body.get("phone"));
+                        userUpdated = true;
+                    }
+                    if (body.containsKey("avatarUrl")) {
+                        user.setAvatarUrl((String) body.get("avatarUrl"));
+                        userUpdated = true;
+                    }
+                    if (body.containsKey("password")) {
+                        String newPassword = (String) body.get("password");
+                        if (newPassword != null && !newPassword.isBlank()) {
+                            user.setPassword(passwordEncoder.encode(newPassword));
+                            userUpdated = true;
+                        }
+                    }
+                    if (userUpdated) {
+                        user.setUpdatedAt(java.time.LocalDateTime.now());
+                        userRepository.save(user);
+                    }
+                });
             }
 
             return ResponseEntity.ok(driverRepository.save(driver));

@@ -55,7 +55,7 @@ public class SecurityConfig {
 
                 // ==== CÔNG KHAI: đăng ký/đăng nhập, duyệt xem sản phẩm/danh mục/khuyến mãi/đánh giá,
                 //      xem ảnh, tạo đơn hàng (hỗ trợ khách vãng lai), cổng thanh toán MoMo (không gắn được JWT) ====
-                .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .requestMatchers(HttpMethod.GET,
                         "/api/products/**", "/api/categories/**", "/api/promotions", "/api/promotions/*",
                         "/api/reviews/**", "/api/product-options/**", "/api/delivery-areas/**",
