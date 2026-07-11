@@ -136,7 +136,10 @@ public class S3Service {
                     .contentType(file.getContentType())
                     .build();
 
-            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            // Use fromBytes instead of fromInputStream to avoid chunked transfer encoding
+            // (STREAMING-AWS4-HMAC-SHA256-PAYLOAD) which Supabase S3 does not support
+            byte[] fileBytes = file.getBytes();
+            s3Client.putObject(request, RequestBody.fromBytes(fileBytes));
 
             // Return key only - frontend will get presigned URL via /api/upload/presigned
             return key;
