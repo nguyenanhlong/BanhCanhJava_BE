@@ -140,7 +140,7 @@ public class OrderController {
     }
 
     private static final java.util.Set<String> VALID_STATUSES = java.util.Set.of(
-        "pending", "confirmed", "preparing", "picked_up", "shipping", "delivered", "completed", "cancelled");
+        "pending", "preparing", "shipping", "completed", "cancelled");
 
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam String status) {
@@ -156,16 +156,12 @@ public class OrderController {
         return orderRepository.findById(longId).map(order -> {
             String oldStatus = order.getStatus();
             order.setStatus(status);
-            // Shipper xác nhận giao xong ("delivered") hoặc đơn kết thúc: giải phóng tài xế về
-            // trạng thái sẵn sàng và đóng chuyến giao còn dang dở (nếu có) để tài xế không bị
-            // kẹt ở trạng thái "đang có chuyến giao".
-            if ("delivered".equals(status) || "completed".equals(status) || "cancelled".equals(status)) {
-                String tripStatus = "cancelled".equals(status) ? "cancelled" : "delivered";
+            // Đơn kết thúc: giải phóng tài xế và đóng chuyến giao
+            if ("completed".equals(status) || "cancelled".equals(status)) {
                 deliveryTripRepository.findByOrderId(order.getId()).forEach(trip -> {
                     if ("assigned".equals(trip.getStatus()) || "accepted".equals(trip.getStatus()) || "picked_up".equals(trip.getStatus())) {
-                        trip.setStatus(tripStatus);
+                        trip.setStatus("completed".equals(status) ? "delivered" : "cancelled");
                         trip.setUpdatedAt(LocalDateTime.now());
-                        if ("delivered".equals(tripStatus)) trip.setDeliveredAt(LocalDateTime.now());
                         deliveryTripRepository.save(trip);
                     }
                 });
@@ -176,13 +172,16 @@ public class OrderController {
                     });
                 }
             }
-            if ("delivered".equals(status)) {
+            if ("shipping".equals(status)) {
+                order.setDeliveryProgress(50);
+            }
+            if ("completed".equals(status)) {
                 order.setDeliveryProgress(100);
             }
             Order saved = orderRepository.save(order);
             saveHistory(saved.getId(), oldStatus, status, 0L, "Cập nhật trạng thái");
 
-            // Tự động phân công tài xế rảnh cho đơn khi chuyển sang trạng thái chế biến
+            // Tự động phân công tài xế rảnh cho đơn khi chuyển sang chế biến
             if ("preparing".equals(status)) {
                 autoAssignDriver(saved);
             }
