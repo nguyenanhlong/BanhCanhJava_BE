@@ -1,9 +1,13 @@
 package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.PasswordResetToken;
+import com.example.banhcanh.model.Role;
 import com.example.banhcanh.model.User;
+import com.example.banhcanh.model.UserRole;
 import com.example.banhcanh.repository.PasswordResetTokenRepository;
+import com.example.banhcanh.repository.RoleRepository;
 import com.example.banhcanh.repository.UserRepository;
+import com.example.banhcanh.repository.UserRoleRepository;
 import com.example.banhcanh.security.JwtUtil;
 import com.example.banhcanh.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -33,6 +38,12 @@ public class AuthController {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private UserRoleRepository userRoleRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody User user) {
@@ -131,26 +142,33 @@ public class AuthController {
     }
 
     /**
-     * Resolve the effective role from User.roles (RBAC table).
-     * Priority: SUPER_ADMIN > ADMIN > DRIVER > CUSTOMER.
-     * Falls back to User.role String field if no roles in user_roles table.
+     * Resolve the effective role from user_roles table (direct query, bypassing User.roles JPA @ManyToMany
+     * which may conflict with the standalone UserRole entity on the same join table).
+     * Priority: ROLE_SUPER_ADMIN > ROLE_ADMIN > ROLE_DRIVER > ROLE_CUSTOMER.
+     * Falls back to User.role String field if no rows in user_roles table.
      */
     private String resolveEffectiveRole(User user) {
-        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+        List<UserRole> userRoles = userRoleRepository.findByUserId(user.getId());
+        if (userRoles != null && !userRoles.isEmpty()) {
             for (String priority : List.of("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_DRIVER")) {
-                for (var r : user.getRoles()) {
-                    if (r.getName().equalsIgnoreCase(priority) && Boolean.TRUE.equals(r.getIsActive())) {
-                        return r.getName().toUpperCase();
+                for (UserRole ur : userRoles) {
+                    Optional<Role> roleOpt = roleRepository.findById(ur.getRoleId());
+                    if (roleOpt.isPresent() && roleOpt.get().getName().equalsIgnoreCase(priority)
+                        && Boolean.TRUE.equals(roleOpt.get().getIsActive())) {
+                        String name = roleOpt.get().getName().toUpperCase(); // "ROLE_SUPER_ADMIN"
+                        return name.startsWith("ROLE_") ? name.substring(5).toLowerCase() : name.toLowerCase();
                     }
                 }
             }
-            // Return the first active role found
-            for (var r : user.getRoles()) {
-                if (Boolean.TRUE.equals(r.getIsActive())) {
-                    return r.getName().toUpperCase();
+            // Return the first active role (strip ROLE_ prefix)
+            for (UserRole ur : userRoles) {
+                Optional<Role> roleOpt = roleRepository.findById(ur.getRoleId());
+                if (roleOpt.isPresent() && Boolean.TRUE.equals(roleOpt.get().getIsActive())) {
+                    String name = roleOpt.get().getName().toUpperCase();
+                    return name.startsWith("ROLE_") ? name.substring(5).toLowerCase() : name.toLowerCase();
                 }
             }
         }
-        return user.getRole();
+        return user.getRole(); // e.g. "super_admin"
     }
 }
