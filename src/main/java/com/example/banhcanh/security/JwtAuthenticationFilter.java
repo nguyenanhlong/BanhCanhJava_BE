@@ -23,9 +23,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** Reads "Authorization: Bearer <token>" and, if valid, populates the SecurityContext. */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
@@ -53,15 +58,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String jwtRole = claims.get("role", String.class);
                 String username = claims.getSubject();
 
+                log.debug("[AUTH] userId={}, jwtRole={}, username={}", userId, jwtRole, username);
+
                 // Build authorities from DB (direct query to user_roles table, bypassing JPA @ManyToMany)
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
                 // 1) Roles from user_roles table (direct query)
-                for (UserRole ur : userRoleRepository.findByUserId(userId)) {
+                List<UserRole> userRoles = userRoleRepository.findByUserId(userId);
+                log.debug("[AUTH] userRoles count={} for userId={}", userRoles.size(), userId);
+                for (UserRole ur : userRoles) {
                     roleRepository.findById(ur.getRoleId()).ifPresent(role -> {
                         if (Boolean.TRUE.equals(role.getIsActive())) {
                             String rn = role.getName().toUpperCase();
                             if (!rn.startsWith("ROLE_")) rn = "ROLE_" + rn;
+                            log.debug("[AUTH] RBAC authority added: {} (from role={})", rn, role.getName());
                             authorities.add(new SimpleGrantedAuthority(rn));
                         }
                     });
@@ -71,19 +81,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Optional<User> userOpt = userRepository.findById(userId);
                 if (userOpt.isPresent() && userOpt.get().getRole() != null) {
                     String stringRole = "ROLE_" + userOpt.get().getRole().toUpperCase();
+                    log.debug("[AUTH] User.role String = '{}' -> authority = {}", userOpt.get().getRole(), stringRole);
                     boolean alreadyHas = authorities.stream()
                             .anyMatch(a -> a.getAuthority().equals(stringRole));
                     if (!alreadyHas) {
                         authorities.add(new SimpleGrantedAuthority(stringRole));
                     }
+                } else {
+                    log.warn("[AUTH] User not found in DB for userId={}", userId);
                 }
 
                 // Final fallback: use JWT role claim
                 if (authorities.isEmpty()) {
                     String fallbackRole = (jwtRole == null) ? "CUSTOMER" : jwtRole.toUpperCase();
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + fallbackRole));
+                    log.debug("[AUTH] Fallback authority: ROLE_{}", fallbackRole);
                 }
 
+                log.info("[AUTH] user={} authorities={}", username, authorities);
                 String displayRole = jwtRole != null ? jwtRole : "customer";
                 AuthenticatedUser principal = new AuthenticatedUser(userId, username, displayRole);
                 var authToken = new UsernamePasswordAuthenticationToken(
