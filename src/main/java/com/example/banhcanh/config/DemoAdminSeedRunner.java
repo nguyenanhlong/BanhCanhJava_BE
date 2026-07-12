@@ -55,7 +55,6 @@ public class DemoAdminSeedRunner implements CommandLineRunner {
             User user = userRepository.findByUsername(acc.username()).orElse(null);
             if (user == null) {
                 if (userRepository.existsByEmail(acc.email())) {
-                    // Email already taken by a different account — skip to avoid a unique-constraint clash.
                     continue;
                 }
                 user = new User();
@@ -67,15 +66,22 @@ public class DemoAdminSeedRunner implements CommandLineRunner {
                 user.setPassword(passwordEncoder.encode(acc.rawPassword()));
                 userRepository.save(user);
                 log.info("Đã tạo tài khoản demo '{}' (role={}).", acc.username(), acc.role());
-            } else if (isPlaceholderOrMissing(user.getPassword())) {
-                user.setPassword(passwordEncoder.encode(acc.rawPassword()));
-                // Đảm bảo role đúng nếu row seed bị lệch.
-                if (user.getRole() == null || !user.getRole().equals(acc.role())) {
+            } else {
+                // Always sync role for demo accounts (even if password is already valid)
+                boolean changed = false;
+                if (!acc.role().equals(user.getRole())) {
                     user.setRole(acc.role());
+                    changed = true;
+                }
+                if (isPlaceholderOrMissing(user.getPassword())) {
+                    user.setPassword(passwordEncoder.encode(acc.rawPassword()));
+                    changed = true;
                 }
                 user.setIsActive(true);
-                userRepository.save(user);
-                log.info("Đã sửa mật khẩu placeholder cho tài khoản demo '{}' sang BCrypt.", acc.username());
+                if (changed) {
+                    userRepository.save(user);
+                    log.info("Đã sync role/password cho tài khoản demo '{}' (role={}).", acc.username(), acc.role());
+                }
             }
         }
     }
