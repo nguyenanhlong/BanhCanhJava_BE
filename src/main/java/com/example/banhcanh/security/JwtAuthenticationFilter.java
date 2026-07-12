@@ -99,8 +99,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
 
                 log.info("[AUTH] user={} authorities={}", username, authorities);
-                String displayRole = jwtRole != null ? jwtRole : "customer";
-                AuthenticatedUser principal = new AuthenticatedUser(userId, username, displayRole);
+                // Resolve display role from DB-based authorities, not JWT claim
+                String resolvedRole = "customer";
+                for (SimpleGrantedAuthority auth : authorities) {
+                    String a = auth.getAuthority();
+                    if ("ROLE_SUPER_ADMIN".equals(a)) { resolvedRole = "super_admin"; break; }
+                    if ("ROLE_ADMIN".equals(a)) resolvedRole = "admin";
+                    else if ("ROLE_DRIVER".equals(a) && !"admin".equals(resolvedRole)) resolvedRole = "driver";
+                }
+                AuthenticatedUser principal = new AuthenticatedUser(userId, username, resolvedRole);
                 var authToken = new UsernamePasswordAuthenticationToken(
                         principal, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authToken);

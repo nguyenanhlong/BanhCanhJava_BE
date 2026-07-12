@@ -2,8 +2,10 @@ package com.example.banhcanh.controller;
 
 import com.example.banhcanh.model.*;
 import com.example.banhcanh.repository.*;
+import com.example.banhcanh.security.AuthenticatedUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
@@ -31,9 +33,12 @@ public class RoleController {
     }
 
     @PostMapping("/roles")
-    public Role createRole(@RequestBody Role role) {
+    public ResponseEntity<?> createRole(@RequestBody Role role, @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được tạo vai trò"));
+        }
         role.setId(null);
-        return roleRepository.save(role);
+        return ResponseEntity.ok(roleRepository.save(role));
     }
 
     @PutMapping("/roles/{id}")
@@ -48,7 +53,10 @@ public class RoleController {
     }
 
     @DeleteMapping("/roles/{id}")
-    public ResponseEntity<Void> deleteRole(@PathVariable Long id) {
+    public ResponseEntity<?> deleteRole(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được xoá vai trò"));
+        }
         if (roleRepository.existsById(id)) {
             roleRepository.deleteById(id);
             return ResponseEntity.ok().build();
@@ -73,7 +81,11 @@ public class RoleController {
     // --- ROLE-PERMISSION ASSIGNMENT ---
 
     @PostMapping("/role-permissions")
-    public ResponseEntity<?> assignPermissionToRole(@RequestBody Map<String, Long> body) {
+    public ResponseEntity<?> assignPermissionToRole(@RequestBody Map<String, Long> body,
+                                                     @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được phân quyền"));
+        }
         Long roleId = body.get("roleId");
         Long permissionId = body.get("permissionId");
         return roleRepository.findById(roleId).map(role ->
@@ -86,7 +98,11 @@ public class RoleController {
     }
 
     @DeleteMapping("/role-permissions")
-    public ResponseEntity<?> removePermissionFromRole(@RequestBody Map<String, Long> body) {
+    public ResponseEntity<?> removePermissionFromRole(@RequestBody Map<String, Long> body,
+                                                       @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được thu hồi quyền"));
+        }
         Long roleId = body.get("roleId");
         Long permissionId = body.get("permissionId");
         return roleRepository.findById(roleId).map(role ->
@@ -111,7 +127,11 @@ public class RoleController {
     }
 
     @PostMapping("/users/{userId}/roles")
-    public ResponseEntity<?> assignRoleToUser(@PathVariable Long userId, @RequestBody Map<String, Long> body) {
+    public ResponseEntity<?> assignRoleToUser(@PathVariable Long userId, @RequestBody Map<String, Long> body,
+                                               @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được phân quyền"));
+        }
         Long roleId = body.get("roleId");
         UserRoleId id = new UserRoleId(userId, roleId);
         if (userRoleRepository.existsById(id)) {
@@ -126,7 +146,11 @@ public class RoleController {
     }
 
     @DeleteMapping("/users/{userId}/roles/{roleId}")
-    public ResponseEntity<Void> removeRoleFromUser(@PathVariable Long userId, @PathVariable Long roleId) {
+    public ResponseEntity<?> removeRoleFromUser(@PathVariable Long userId, @PathVariable Long roleId,
+                                                  @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (principal == null || !principal.isSuperAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Chỉ Super Admin mới được thu hồi quyền"));
+        }
         userRoleRepository.deleteByUserIdAndRoleId(userId, roleId);
         syncUserRoleField(userId);
         return ResponseEntity.ok().build();
@@ -144,7 +168,7 @@ public class RoleController {
         for (UserRole ur : userRoles) {
             Optional<Role> roleOpt = roleRepository.findById(ur.getRoleId());
             if (roleOpt.isPresent()) {
-                String name = roleOpt.get().getName().toUpperCase(); // e.g. "ROLE_ADMIN"
+                String name = roleOpt.get().getName().toUpperCase();
                 if (name.startsWith("ROLE_")) name = name.substring(5);
                 if (name.equals("SUPER_ADMIN")) { highestRole = "super_admin"; break; }
                 if (name.equals("ADMIN")) highestRole = "admin";
@@ -161,8 +185,6 @@ public class RoleController {
     @GetMapping("/users/current/permissions")
     public ResponseEntity<Set<String>> getCurrentUserPermissions(
             @RequestHeader("Authorization") String authHeader) {
-        // Simple: extract username from Basic Auth or return empty
-        // For now return all permissions for super_admin
         return roleRepository.findAll().stream()
             .findFirst()
             .map(role -> {
