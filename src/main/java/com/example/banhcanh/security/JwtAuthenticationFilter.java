@@ -1,7 +1,11 @@
 package com.example.banhcanh.security;
 
+import com.example.banhcanh.model.Role;
 import com.example.banhcanh.model.User;
+import com.example.banhcanh.model.UserRole;
+import com.example.banhcanh.repository.RoleRepository;
 import com.example.banhcanh.repository.UserRepository;
+import com.example.banhcanh.repository.UserRoleRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,10 +29,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository,
+                                   UserRoleRepository userRoleRepository, RoleRepository roleRepository) {
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
+        this.userRoleRepository = userRoleRepository;
+        this.roleRepository = roleRepository;
     }
 
     @Override
@@ -44,31 +53,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String jwtRole = claims.get("role", String.class);
                 String username = claims.getSubject();
 
-                // Load roles from DB (User.roles via user_roles table)
+                // Build authorities from DB (direct query to user_roles table, bypassing JPA @ManyToMany)
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+
+                // 1) Roles from user_roles table (direct query)
+                for (UserRole ur : userRoleRepository.findByUserId(userId)) {
+                    roleRepository.findById(ur.getRoleId()).ifPresent(role -> {
+                        if (Boolean.TRUE.equals(role.getIsActive())) {
+                            String rn = role.getName().toUpperCase();
+                            if (!rn.startsWith("ROLE_")) rn = "ROLE_" + rn;
+                            authorities.add(new SimpleGrantedAuthority(rn));
+                        }
+                    });
+                }
+
+                // 2) Role from User.role String field (always included)
                 Optional<User> userOpt = userRepository.findById(userId);
-                if (userOpt.isPresent()) {
-                    User user = userOpt.get();
-                    // 1) Roles from RBAC table (user_roles) — names already have ROLE_ prefix
-                    if (user.getRoles() != null) {
-                        for (var role : user.getRoles()) {
-                            if (Boolean.TRUE.equals(role.getIsActive())) {
-                                String rn = role.getName().toUpperCase();
-                                if (!rn.startsWith("ROLE_")) rn = "ROLE_" + rn;
-                                authorities.add(new SimpleGrantedAuthority(rn));
-                            }
-                        }
-                    }
-                    // 2) Role from User.role String field (always included)
-                    if (user.getRole() != null) {
-                        String stringRole = "ROLE_" + user.getRole().toUpperCase();
-                        boolean alreadyHas = authorities.stream()
-                                .anyMatch(a -> a.getAuthority().equals(stringRole));
-                        if (!alreadyHas) {
-                            authorities.add(new SimpleGrantedAuthority(stringRole));
-                        }
+                if (userOpt.isPresent() && userOpt.get().getRole() != null) {
+                    String stringRole = "ROLE_" + userOpt.get().getRole().toUpperCase();
+                    boolean alreadyHas = authorities.stream()
+                            .anyMatch(a -> a.getAuthority().equals(stringRole));
+                    if (!alreadyHas) {
+                        authorities.add(new SimpleGrantedAuthority(stringRole));
                     }
                 }
+
                 // Final fallback: use JWT role claim
                 if (authorities.isEmpty()) {
                     String fallbackRole = (jwtRole == null) ? "CUSTOMER" : jwtRole.toUpperCase();
