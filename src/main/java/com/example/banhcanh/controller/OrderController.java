@@ -181,7 +181,13 @@ public class OrderController {
             }
             Order saved = orderRepository.save(order);
             saveHistory(saved.getId(), oldStatus, status, 0L, "Cập nhật trạng thái");
-            return ResponseEntity.ok(saved);
+
+            // Tự động phân công tài xế rảnh cho đơn khi chuyển sang trạng thái chế biến
+            if ("preparing".equals(status)) {
+                autoAssignDriver(saved);
+            }
+
+            return ResponseEntity.ok(orderRepository.findById(saved.getId()).orElse(saved));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -268,5 +274,28 @@ public class OrderController {
         h.setNotes(notes);
         h.setCreatedAt(LocalDateTime.now());
         historyRepository.save(h);
+    }
+
+    private void autoAssignDriver(Order order) {
+        if (order.getDriverId() != null) return;
+
+        List<Driver> availableDrivers = driverRepository.findByStatus("available");
+        if (availableDrivers.isEmpty()) return;
+
+        Driver driver = availableDrivers.get(0);
+        order.setDriverId(driver.getId());
+        driver.setStatus("busy");
+        driverRepository.save(driver);
+        orderRepository.save(order);
+
+        DeliveryTrip trip = new DeliveryTrip();
+        trip.setOrderId(order.getId());
+        trip.setDriverId(driver.getId());
+        trip.setStatus("assigned");
+        trip.setCreatedAt(LocalDateTime.now());
+        deliveryTripRepository.save(trip);
+
+        saveHistory(order.getId(), order.getStatus(), order.getStatus(), driver.getId(),
+                "Tự động giao tài xế #" + driver.getId() + " - " + driver.getName());
     }
 }

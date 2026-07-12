@@ -6,4 +6,8 @@ public record AuthenticatedUser(Long userId, String username, String role) {
     public boolean isAdmin() {
         return "admin".equalsIgnoreCase(role) || "super_admin".equalsIgnoreCase(role);
     }
+
+    public boolean isSuperAdmin() {
+        return "super_admin".equalsIgnoreCase(role);
+    }
 }
